@@ -1,6 +1,13 @@
 import streamlit as st
 import google.generativeai as genai
-import json
+
+# === [버전 확인용 긴급 코드] ===
+st.write(f"현재 서버에 설치된 AI 도구 버전: {genai.__version__}")
+# 버전이 0.7.0보다 낮게 나오면(예: 0.3.0) requirements.txt가 무시되고 있다는 뜻입니다.
+# ============================
+
+# ... (그 아래 나머지 코드는 그대로 두세요)
+
 
 # 1. 페이지 기본 설정 (넓은 레이아웃, 아이콘)
 st.set_page_config(
