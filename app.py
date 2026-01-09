@@ -1,6 +1,33 @@
 import streamlit as st
 import google.generativeai as genai
-import json
+import os
+
+# 1. API 키 설정
+try:
+    api_key = st.secrets["GEMINI_API_KEY"]
+    genai.configure(api_key=api_key)
+except:
+    st.error("API 키가 없습니다.")
+    st.stop()
+
+# 2. 내 키로 쓸 수 있는 모델 조회 (진단 코드)
+st.title("🕵️‍♂️ 모델 조회 중...")
+try:
+    available_models = []
+    for m in genai.list_models():
+        if 'generateContent' in m.supported_generation_methods:
+            available_models.append(m.name)
+    
+    st.success("✅ 조회 성공! 사용 가능한 모델 목록:")
+    st.code(available_models)
+    
+    st.info("위 목록에 있는 이름 중 하나를 골라 app.py에 적으면 해결됩니다!")
+
+except Exception as e:
+    st.error(f"❌ API 키 자체에 문제가 있습니다: {e}")
+    st.error("새로운 API Key를 발급받아보세요.")
+
+# (이 아래 코드는 잠시 무시됩니다)
 
 # 1. 페이지 기본 설정
 st.set_page_config(
