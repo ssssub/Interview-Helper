@@ -183,7 +183,7 @@ if analyze_btn:
         with st.status("🔍 AI 면접관이 서류를 검토하고 있습니다...", expanded=True) as status:
             try:
                 # 프롬프트 엔지니어링
-                model = genai.GenerativeModel('gemini-pro')
+                model = genai.GenerativeModel('gemini-1.5-flash')
                 prompt = f"""
                 당신은 10년 차 채용 담당 면접관입니다. 다음 정보를 바탕으로 분석을 수행하세요.
                 
