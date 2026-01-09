@@ -1,33 +1,6 @@
 import streamlit as st
 import google.generativeai as genai
-import os
-
-# 1. API 키 설정
-try:
-    api_key = st.secrets["GEMINI_API_KEY"]
-    genai.configure(api_key=api_key)
-except:
-    st.error("API 키가 없습니다.")
-    st.stop()
-
-# 2. 내 키로 쓸 수 있는 모델 조회 (진단 코드)
-st.title("🕵️‍♂️ 모델 조회 중...")
-try:
-    available_models = []
-    for m in genai.list_models():
-        if 'generateContent' in m.supported_generation_methods:
-            available_models.append(m.name)
-    
-    st.success("✅ 조회 성공! 사용 가능한 모델 목록:")
-    st.code(available_models)
-    
-    st.info("위 목록에 있는 이름 중 하나를 골라 app.py에 적으면 해결됩니다!")
-
-except Exception as e:
-    st.error(f"❌ API 키 자체에 문제가 있습니다: {e}")
-    st.error("새로운 API Key를 발급받아보세요.")
-
-# (이 아래 코드는 잠시 무시됩니다)
+import json
 
 # 1. 페이지 기본 설정
 st.set_page_config(
@@ -138,7 +111,7 @@ if analyze_btn:
                     "max_output_tokens": 4096,
                 }
                 
-                model = genai.GenerativeModel('gemini-1.5-flash', generation_config=generation_config)
+                model = genai.GenerativeModel('models/gemini-2.5-flash', generation_config=generation_config)
                 
                 # [중요 변경 2] 프롬프트에서 점수 평가와 질문 생성을 명확히 분리
                 prompt = f"""
