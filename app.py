@@ -1,14 +1,33 @@
 import streamlit as st
 import google.generativeai as genai
+import os
 
-# === [버전 확인용 긴급 코드] ===
-st.write(f"현재 서버에 설치된 AI 도구 버전: {genai.__version__}")
-# 버전이 0.7.0보다 낮게 나오면(예: 0.3.0) requirements.txt가 무시되고 있다는 뜻입니다.
-# ============================
+# 1. API 키 설정
+try:
+    api_key = st.secrets["GEMINI_API_KEY"]
+    genai.configure(api_key=api_key)
+except:
+    st.error("API 키가 없습니다.")
+    st.stop()
 
-# ... (그 아래 나머지 코드는 그대로 두세요)
+# 2. 내 키로 쓸 수 있는 모델 조회 (진단 코드)
+st.title("🕵️‍♂️ 모델 조회 중...")
+try:
+    available_models = []
+    for m in genai.list_models():
+        if 'generateContent' in m.supported_generation_methods:
+            available_models.append(m.name)
+    
+    st.success("✅ 조회 성공! 사용 가능한 모델 목록:")
+    st.code(available_models)
+    
+    st.info("위 목록에 있는 이름 중 하나를 골라 app.py에 적으면 해결됩니다!")
 
+except Exception as e:
+    st.error(f"❌ API 키 자체에 문제가 있습니다: {e}")
+    st.error("새로운 API Key를 발급받아보세요.")
 
+# (이 아래 코드는 잠시 무시됩니다)
 # 1. 페이지 기본 설정 (넓은 레이아웃, 아이콘)
 st.set_page_config(
     page_title="Interview Master | AI 면접 분석",
