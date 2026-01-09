@@ -2,16 +2,17 @@ import streamlit as st
 import google.generativeai as genai
 import json
 
-# 1. 페이지 설정 및 디자인 (React의 깔끔한 톤 유지)
+# 1. 페이지 설정 및 디자인
 st.set_page_config(page_title="1분 역전: 면접 압박 질문 생성기", page_icon="⚡", layout="wide")
 
+# CSS 스타일 적용 (오타 수정됨: unsafe_allow_html=True)
 st.markdown("""
     <style>
     .main { background-color: #f8fafc; }
     .stButton>button { width: 100%; border-radius: 50px; height: 3em; background-color: #2563eb; color: white; font-weight: bold; }
     .stTextArea>div>div>textarea { border-radius: 10px; }
     </style>
-    """, unsafe_allow_stdio=True)
+    """, unsafe_allow_html=True)
 
 # 2. API 키 설정 (Secrets 활용)
 try:
@@ -21,11 +22,11 @@ except:
     st.error("API 키가 설정되지 않았습니다. Streamlit Settings > Secrets에 키를 등록해주세요.")
     st.stop()
 
-# 3. 화면 구성 (React 코드의 Header 및 Intro 부분)
+# 3. 화면 구성
 st.title("⚡ 1분 역전: 실전 면접 시뮬레이션")
 st.caption("면접관의 성향을 선택하고 공고와 이력서를 입력하세요. AI가 당신의 약점을 분석합니다.")
 
-# 4. 입력 섹션 (React의 Mode Toggle 및 TextArea 부분)
+# 4. 입력 섹션
 col1, col2 = st.columns(2)
 
 with col1:
@@ -69,11 +70,10 @@ if st.button("적합도 분석 및 질문 생성"):
             
             try:
                 response = model.generate_content(prompt)
-                # JSON 문자열만 추출 (코드 블록 제거)
                 json_str = response.text.replace('```json', '').replace('```', '').strip()
                 result = json.loads(json_str)
                 
-                # 6. 결과 화면 (React의 FitScoreCard 및 ResultCard 부분)
+                # 6. 결과 화면
                 st.divider()
                 st.subheader(f"🎯 직무 적합도 점수: {result['fitScore']}점")
                 st.info(result['fitReason'])
@@ -88,4 +88,4 @@ if st.button("적합도 분석 및 질문 생성"):
                 st.balloons()
                 
             except Exception as e:
-                st.error(f"분석 중 오류가 발생했습니다: {e}")
+                st.error(f"분석 중 오류가 발생했습니다. 입력을 확인하거나 잠시 후 다시 시도해 주세요.")
