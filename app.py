@@ -118,36 +118,38 @@ if analyze_btn:
                 # [STEP 1] 점수 채점 + 직무 분류
                 print(f"[{datetime.datetime.now()}] 1️⃣ 직무 적합도 및 분류 분석 중... (Gemma-27b)", flush=True)
                 
-                # Gemma 모델 설정 (JSON 강제 옵션 제외 - 호환성 위해)
+                # Gemma 모델 설정
                 config_strict = {
                     "temperature": 0.0, 
                     "top_p": 1, 
                     "top_k": 1, 
                 }
                 
-                # [수정] 쿼터가 넉넉한 'gemma-3-27b-it' 사용
+                # 쿼터가 넉넉한 'gemma-3-27b-it' 사용
                 model_strict = genai.GenerativeModel('models/gemma-3-27b-it', generation_config=config_strict)
                 
+                # [수정] 프롬프트를 한국어로 변경 & 한국어 출력 강제
                 prompt_score = f"""
-                You are a strict hiring algorithm.
+                당신은 엄격한 채용 평가 알고리즘입니다.
                 
-                [Input Data]
-                JD: {jd_input}
-                Resume: {resume_input}
+                [입력 데이터]
+                채용공고(JD): {jd_input}
+                이력서: {resume_input}
                 
-                [Instructions]
-                1. Analyze the JD to define 'job_category' (e.g., Backend Dev, Marketing).
-                2. Calculate a 'score' (0-100) based strictly on keyword matching between JD and Resume.
-                   - Same input must yield the EXACT same score.
+                [지시사항]
+                1. JD를 분석하여 '직무 분류(job_category)'를 한국어로 정의하세요. (예: 백엔드 개발, 마케팅)
+                2. [채점 기준]에 따라 기계적으로 점수를 계산하세요.
+                   - JD 핵심 키워드 매칭률(%)을 정수로 환산하세요.
+                   - 동일한 입력값에는 반드시 동일한 점수를 부여하세요.
+                3. 모든 평가 내용(요약, 피드백 등)은 반드시 '한국어'로 작성하세요.
                 
-                [Output Format]
-                Provide ONLY a valid JSON object. Do not add markdown blocks like ```json.
-                Format:
-                {{ "score": 85, "job_category": "Target Job", "summary": "3 line summary", "feedback": "One key improvement" }}
+                [출력 형식]
+                반드시 아래 JSON 형식으로만 응답하세요. 마크다운(```json)을 포함하지 마세요.
+                {{ "score": 85, "job_category": "직무명", "summary": "3줄 요약", "feedback": "핵심 보완점 한 가지" }}
                 """
                 
                 res_score = model_strict.generate_content(prompt_score)
-                # 혹시 마크다운이 섞여 나올 경우를 대비한 전처리
+                # 마크다운 제거 전처리
                 text_score = res_score.text.replace('```json', '').replace('```', '').strip()
                 json_score = json.loads(text_score)
                 
@@ -161,15 +163,17 @@ if analyze_btn:
                 # 여기도 Gemma-27b 사용
                 model_creative = genai.GenerativeModel('models/gemma-3-27b-it', generation_config=config_creative)
                 
+                # [수정] 프롬프트를 한국어로 변경
                 prompt_questions = f"""
-                You are a '{mode}' style interviewer.
-                Job Category: {json_score['job_category']}
+                당신은 '{mode}' 스타일의 면접관입니다.
+                직무: {json_score['job_category']}
                 
-                Based on the JD and Resume provided previously, generate 3 sharp interview questions.
+                앞서 분석한 JD와 이력서를 바탕으로 날카로운 면접 질문 3가지를 생성하세요.
+                질문과 의도, 팁 모두 반드시 '한국어'로 작성해야 합니다.
                 
-                [Output Format]
-                Provide ONLY a valid JSON object. Do not add markdown blocks.
-                {{ "questions": [ {{ "q": "Question text", "intent": "Intent", "tip": "Advice" }}, ... ] }}
+                [출력 형식]
+                반드시 아래 JSON 형식으로만 응답하세요. 마크다운을 포함하지 마세요.
+                {{ "questions": [ {{ "q": "질문 내용", "intent": "질문 의도", "tip": "답변 팁" }}, ... ] }}
                 """
                 
                 res_questions = model_creative.generate_content(prompt_questions)
