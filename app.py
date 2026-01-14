@@ -2,6 +2,7 @@ import streamlit as st
 import google.generativeai as genai
 import json
 import datetime
+import re
 
 # 1. 페이지 기본 설정
 st.set_page_config(
@@ -130,24 +131,34 @@ if analyze_btn:
                 response = model.generate_content(prompt)
                 
                 try:
-                    text_response = response.text.replace('```json', '').replace('```', '').strip()
-                    result = json.loads(text_response)
+                    # 1. 응답 텍스트 가져오기
+                    original_text = response.text
                     
-                    # [수정 4] flush=True 추가 -> 결과 나오면 즉시 로그 뜸
-                    score = result.get('score', 0)
-                    print(f"[{datetime.datetime.now()}] ✅ 분석 성공! | 점수: {score}점", flush=True)
+                    # 2. [핵심] 정규표현식으로 '{' 시작해서 '}'로 끝나는 JSON 부분만 쏙 추출
+                    # (AI가 "여기 결과입니다:" 같은 잡담을 섞어도 문제없음)
+                    match = re.search(r'\{.*\}', original_text, re.DOTALL)
+                    
+                    if match:
+                        json_str = match.group(0) # 추출된 JSON 문자열
+                        result = json.loads(json_str) # 파싱
+                        
+                        # [로그] 성공 기록
+                        score = result.get('score', 0)
+                        print(f"[{datetime.datetime.now()}] ✅ 분석 성공! | 점수: {score}점", flush=True)
+                    else:
+                        # JSON 형태를 못 찾은 경우
+                        raise ValueError("JSON 형식을 찾을 수 없음")
 
-                except json.JSONDecodeError:
-                    # [수정 5] flush=True 추가
-                    print(f"[{datetime.datetime.now()}] ❌ JSON 파싱 오류 | 내용: {text_response[:50]}...", flush=True)
-                    st.error("AI 응답 처리 중 오류가 발생했습니다.")
+                except (json.JSONDecodeError, ValueError) as e:
+                    # [로그] 실패 원인 상세 기록
+                    print(f"[{datetime.datetime.now()}] ❌ 파싱 실패 | 원인: {str(e)}", flush=True)
+                    print(f"[{datetime.datetime.now()}] 🔍 AI 원본 응답: {original_text}", flush=True) # 이게 로그에 찍혀야 고칠 수 있음
+                    
+                    st.error("AI가 분석 결과를 정리하는 데 실패했습니다. 다시 시도해 주세요.")
+                    with st.expander("개발자용 에러 상세 확인"):
+                        st.code(original_text) # 화면에서도 원본 텍스트 확인 가능하게 함
                     st.stop()
+                # =================================
                 
                 status.update(label="✅ 분석 완료!", state="complete", expanded=False)
-                
-                # ... (아래 결과 화면 출력 코드는 기존과 동일) ...
-                        
-            except Exception as e:
-                # [수정 6] flush=True 추가 -> 에러 나면 즉시 로그 뜸
-                print(f"[{datetime.datetime.now()}] 🚨 시스템 오류 발생: {str(e)}", flush=True)
-                st.error(f"오류가 발생했습니다: {str(e)}")
+                # (아래 결과 출력 코드는 그대로 유지...)
