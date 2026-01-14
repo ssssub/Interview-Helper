@@ -124,7 +124,7 @@ if analyze_btn:
                     "top_k": 1, 
                     "response_mime_type": "application/json",
                 }
-                model_strict = genai.GenerativeModel('models/gemini-1.5-flash', generation_config=config_strict)
+                model_strict = genai.GenerativeModel('models/gemini-2.0-flash', generation_config=config_strict)
                 
                 # 프롬프트에 'job_category' 추출 요청 추가
                 prompt_score = f"""
@@ -154,7 +154,7 @@ if analyze_btn:
                     "temperature": 1.0, 
                     "response_mime_type": "application/json",
                 }
-                model_creative = genai.GenerativeModel('models/gemini-1.5-flash', generation_config=config_creative)
+                model_creative = genai.GenerativeModel('models/gemini-2.0-flash', generation_config=config_creative)
                 
                 prompt_questions = f"""
                 당신은 '{mode}' 스타일의 면접관입니다.
