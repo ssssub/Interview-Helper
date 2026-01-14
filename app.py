@@ -113,11 +113,12 @@ if analyze_btn:
                 # [수정 3] flush=True 추가
                 print(f"[{datetime.datetime.now()}] ▶️ AI 분석 시작 | 모드: {mode} | JD: {len(jd_input)}자", flush=True)
 
-                generation_config = {
-                    "temperature": 0.0,
-                    "top_p": 1,
-                    "top_k": 32,
-                    "max_output_tokens": 4096,
+               generation_config = {
+                    "temperature": 0 # 창의성 낮춤 (안정적)
+                    "top_p": 0.95,
+                    "top_k": 64,
+                    "max_output_tokens": 8192,
+                    "response_mime_type": "application/json",  # <--- [핵심] 무조건 JSON으로만 답하게 함
                 }
                 
                 # 작성자님이 말씀하신 "되는 모델"로 설정 유지
@@ -131,32 +132,22 @@ if analyze_btn:
                 response = model.generate_content(prompt)
                 
                 try:
-                    # 1. 응답 텍스트 가져오기
-                    original_text = response.text
+                    response = model.generate_content(prompt)
                     
-                    # 2. [핵심] 정규표현식으로 '{' 시작해서 '}'로 끝나는 JSON 부분만 쏙 추출
-                    # (AI가 "여기 결과입니다:" 같은 잡담을 섞어도 문제없음)
-                    match = re.search(r'\{.*\}', original_text, re.DOTALL)
+                    # JSON 모드를 켰으므로 복잡한 정규표현식(re) 필요 없음!
+                    # 바로 텍스트를 JSON으로 변환하면 됩니다.
+                    result = json.loads(response.text)
                     
-                    if match:
-                        json_str = match.group(0) # 추출된 JSON 문자열
-                        result = json.loads(json_str) # 파싱
-                        
-                        # [로그] 성공 기록
-                        score = result.get('score', 0)
-                        print(f"[{datetime.datetime.now()}] ✅ 분석 성공! | 점수: {score}점", flush=True)
-                    else:
-                        # JSON 형태를 못 찾은 경우
-                        raise ValueError("JSON 형식을 찾을 수 없음")
+                    # [로그] 성공 기록
+                    score = result.get('score', 0)
+                    print(f"[{datetime.datetime.now()}] ✅ 분석 성공! | 점수: {score}점", flush=True)
 
-                except (json.JSONDecodeError, ValueError) as e:
-                    # [로그] 실패 원인 상세 기록
-                    print(f"[{datetime.datetime.now()}] ❌ 파싱 실패 | 원인: {str(e)}", flush=True)
-                    print(f"[{datetime.datetime.now()}] 🔍 AI 원본 응답: {original_text}", flush=True) # 이게 로그에 찍혀야 고칠 수 있음
+                except Exception as e:
+                    # 그래도 에러가 난다면, AI가 응답을 거부했거나 멈춘 경우임
+                    print(f"[{datetime.datetime.now()}] ❌ 치명적 오류 | 원인: {str(e)}", flush=True)
+                    print(f"[{datetime.datetime.now()}] 🔍 원본 응답: {response.text if 'response' in locals() else '응답 없음'}", flush=True)
                     
-                    st.error("AI가 분석 결과를 정리하는 데 실패했습니다. 다시 시도해 주세요.")
-                    with st.expander("개발자용 에러 상세 확인"):
-                        st.code(original_text) # 화면에서도 원본 텍스트 확인 가능하게 함
+                    st.error("AI가 답변을 생성하지 못했습니다. (내용이 너무 길거나, 안전 정책에 걸렸을 수 있습니다.)")
                     st.stop()
                 # =================================
                 
