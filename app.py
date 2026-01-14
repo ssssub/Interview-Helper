@@ -118,17 +118,14 @@ if analyze_btn:
                 # [STEP 1] 점수 채점 + 직무 분류
                 print(f"[{datetime.datetime.now()}] 1️⃣ 직무 적합도 및 분류 분석 중... (Gemma-27b)", flush=True)
                 
-                # Gemma 모델 설정
                 config_strict = {
                     "temperature": 0.0, 
                     "top_p": 1, 
                     "top_k": 1, 
                 }
                 
-                # 쿼터가 넉넉한 'gemma-3-27b-it' 사용
                 model_strict = genai.GenerativeModel('models/gemma-3-27b-it', generation_config=config_strict)
                 
-                # [수정] 프롬프트를 한국어로 변경 & 한국어 출력 강제
                 prompt_score = f"""
                 당신은 엄격한 채용 평가 알고리즘입니다.
                 
@@ -149,7 +146,6 @@ if analyze_btn:
                 """
                 
                 res_score = model_strict.generate_content(prompt_score)
-                # 마크다운 제거 전처리
                 text_score = res_score.text.replace('```json', '').replace('```', '').strip()
                 json_score = json.loads(text_score)
                 
@@ -160,10 +156,8 @@ if analyze_btn:
                 config_creative = {
                     "temperature": 1.0, 
                 }
-                # 여기도 Gemma-27b 사용
                 model_creative = genai.GenerativeModel('models/gemma-3-27b-it', generation_config=config_creative)
                 
-                # [수정] 프롬프트를 한국어로 변경
                 prompt_questions = f"""
                 당신은 '{mode}' 스타일의 면접관입니다.
                 직무: {json_score['job_category']}
@@ -201,7 +195,7 @@ if analyze_btn:
                 st.error(f"오류가 발생했습니다: {str(e)}")
                 st.stop()
 
-# --- 결과 화면 출력 (기존과 동일) ---
+# --- 결과 화면 출력 ---
 if st.session_state['analysis_result']:
     result = st.session_state['analysis_result']
     meta = result['meta']
@@ -219,6 +213,7 @@ if st.session_state['analysis_result']:
 
     st.markdown("<br>", unsafe_allow_html=True)
     
+    # 점수 카드
     st.markdown(f"""
     <div class="result-card" style="text-align: center;">
         <span class="score-badge">직무 적합도</span>
@@ -238,27 +233,47 @@ if st.session_state['analysis_result']:
             st.markdown(f"**🎯 질문 의도:** {q['intent']}")
             st.info(f"**💡 답변 가이드:** {q['tip']}")
 
+    # --- 만족도 및 의견 조사 (수정된 부분) ---
     st.markdown("---")
-    st.markdown("#### 💬 결과가 도움이 되셨나요?")
-    st.caption("아래 버튼을 눌러 평가해주시면 서비스 개선에 큰 도움이 됩니다.")
+    st.markdown("#### 💬 서비스가 도움이 되셨나요?")
+    st.caption("서비스 개선을 위해 의견을 남겨주세요.")
     
-    cols = st.columns(5)
-    emojis = ["😡", "🙁", "😐", "🙂", "😍"]
-    
-    def save_feedback(score):
-        full_log = (
-            f"[{datetime.datetime.now()}] ⭐ 사용자피드백 | "
-            f"만족도: {score}점 | "
-            f"직무: {result.get('job_category')} | "
-            f"점수: {result['score']} | "
-            f"모드: {meta['mode']} | "
-            f"JD: {meta['jd_len']}자 | "
-            f"Resume: {meta['resume_len']}자"
-        )
-        print(full_log, flush=True)
-        st.toast(f"{score}점 평가 감사합니다! 로그가 저장되었습니다.", icon="✅")
-        st.session_state['log_saved'] = True
+    # [설명] 화면 배치를 위해 컨테이너 사용
+    # button_container: 버튼이 들어갈 자리 (위쪽)
+    # feedback_container: 텍스트 입력창이 들어갈 자리 (아래쪽)
+    button_container = st.container()
+    feedback_container = st.container()
 
-    for i in range(5):
-        if cols[i].button(f"{emojis[i]} {i+1}점", use_container_width=True, key=f"rating_{i}"):
-            save_feedback(i+1)
+    # [중요] 텍스트 입력을 먼저 코딩해야(실행해야) 버튼 클릭 시 값을 가져올 수 있음
+    # 단, 위치는 feedback_container(아래쪽)에 넣어서 시각적으로는 버튼 밑에 뜨게 함
+    with feedback_container:
+        user_comment = st.text_area("feedback_text", placeholder="자유롭게 의견을 남겨주세요. (작성 후 위 점수 버튼을 눌러주세요)", height=80, label_visibility="collapsed")
+
+    # [중요] 버튼을 나중에 코딩하지만, button_container(위쪽)에 넣어서 시각적으로는 위에 뜨게 함
+    with button_container:
+        cols = st.columns(5)
+        emojis = ["😡", "🙁", "😐", "🙂", "😍"]
+        
+        def save_feedback(score, comment):
+            # 로그에 의견 포함 (줄바꿈은 공백 처리)
+            clean_comment = comment.replace('\n', ' ') if comment else "의견없음"
+            
+            full_log = (
+                f"[{datetime.datetime.now()}] ⭐ 사용자피드백 | "
+                f"만족도: {score}점 | "
+                f"의견: {clean_comment} | " # 의견 추가됨
+                f"직무: {result.get('job_category')} | "
+                f"점수: {result['score']} | "
+                f"모드: {meta['mode']} | "
+                f"JD: {meta['jd_len']}자 | "
+                f"Resume: {meta['resume_len']}자"
+            )
+            print(full_log, flush=True)
+            # [요청사항 반영] 토스트 메시지 변경
+            st.toast("서비스를 이용해주셔서 감사합니다!", icon="✅")
+            st.session_state['log_saved'] = True
+
+        for i in range(5):
+            # use_container_width=True로 버튼 꽉 차게 정렬
+            if cols[i].button(f"{emojis[i]} {i+1}점", use_container_width=True, key=f"rating_{i}"):
+                save_feedback(i+1, user_comment)
