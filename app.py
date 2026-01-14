@@ -114,7 +114,7 @@ if analyze_btn:
                 print(f"[{datetime.datetime.now()}] ▶️ AI 분석 시작 | 모드: {mode} | JD: {len(jd_input)}자", flush=True)
 
                generation_config = {
-                    "temperature": 0 # 창의성 낮춤 (안정적)
+                    "temperature": 0,
                     "top_p": 0.95,
                     "top_k": 64,
                     "max_output_tokens": 8192,
