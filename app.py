@@ -98,6 +98,14 @@ with center_col:
     analyze_btn = st.button("AI 심층 분석 시작")
 
 # 7. AI 분석 로직
+
+# [필수] 세션 스테이트 초기화 (결과 유지를 위해 필요)
+if 'analysis_result' not in st.session_state:
+    st.session_state['analysis_result'] = None
+if 'log_saved' not in st.session_state:
+    st.session_state['log_saved'] = False
+
+# 분석 버튼 클릭 시
 if analyze_btn:
     print(f"\n[{datetime.datetime.now()}] 🖱️ '분석 시작' 버튼 클릭됨", flush=True)
 
@@ -106,48 +114,41 @@ if analyze_btn:
     else:
         with st.status("🔍 AI 면접관이 서류를 검토하고 있습니다...", expanded=True) as status:
             try:
-                # [STEP 1] 점수 채점 (변수 차단 모드)
-                print(f"[{datetime.datetime.now()}] 1️⃣ 직무 적합도 정밀 채점 중...", flush=True)
+                # [STEP 1] 점수 채점 + 직무 분류 (직무 분류 기능 추가됨)
+                print(f"[{datetime.datetime.now()}] 1️⃣ 직무 적합도 및 분류 분석 중...", flush=True)
                 
-                # [핵심 설정 1] top_k를 1로 설정하여 '무조건 1등 답변'만 선택하게 강제
                 config_strict = {
                     "temperature": 0.0, 
-                    "top_p": 1,
-                    "top_k": 1, # <--- 여기가 핵심! (변수 창출 원천 봉쇄)
+                    "top_p": 1, 
+                    "top_k": 1, 
                     "response_mime_type": "application/json",
                 }
-                
-                # 요청하신 모델명 적용
                 model_strict = genai.GenerativeModel('models/gemini-2.5-flash', generation_config=config_strict)
                 
-                # [핵심 설정 2] '느낌'이 아니라 '계산'을 하도록 알고리즘 지시
+                # 프롬프트에 'job_category' 추출 요청 추가
                 prompt_score = f"""
                 당신은 엄격한 채점 알고리즘입니다. 
-                아래 [채점 기준]에 따라 기계적으로 점수를 계산하세요. 추론하지 말고 계산하세요.
-
+                
                 [입력 데이터] 
                 JD: {jd_input}
                 이력서: {resume_input}
                 
-                [채점 기준 Algorithm]
-                1. JD에 명시된 '핵심 역량/기술' 키워드를 추출하세요.
-                2. 이력서에 해당 키워드가 있는지 1:1로 대조하세요.
-                3. (매칭된 키워드 수 / 전체 핵심 키워드 수) * 100 으로 점수를 산출하세요.
-                4. 결과값은 소수점을 버리고 정수로 출력하세요.
-                
-                **중요: 동일한 입력값에 대해서는 반드시 비트 단위로 동일한 점수가 나와야 합니다.**
+                [지시사항]
+                1. JD를 분석하여 '직무 분류(job_category)'를 단답형으로 정의하세요. (예: 백엔드 개발, 영업 관리, 콘텐츠 마케팅)
+                2. [채점 기준]에 따라 기계적으로 점수를 계산하세요.
+                   - JD 핵심 키워드 매칭률(%)을 정수로 환산.
+                   - 동일 입력값 = 동일 점수 (필수).
 
-                JSON 형식: {{ "score": 숫자, "summary": "3줄 요약", "feedback": "핵심 보완점 1개" }}
+                JSON 형식: {{ "score": 숫자, "job_category": "직무명", "summary": "3줄 요약", "feedback": "핵심 보완점" }}
                 """
                 
                 res_score = model_strict.generate_content(prompt_score)
                 json_score = json.loads(res_score.text)
                 
                 
-                # [STEP 2] 질문 생성 (다양성 모드)
+                # [STEP 2] 질문 생성
                 print(f"[{datetime.datetime.now()}] 2️⃣ 면접 질문 생성 중...", flush=True)
                 
-                # 질문은 매번 달라야 하므로 temperature 1.0 유지
                 config_creative = {
                     "temperature": 1.0, 
                     "response_mime_type": "application/json",
@@ -156,9 +157,9 @@ if analyze_btn:
                 
                 prompt_questions = f"""
                 당신은 '{mode}' 스타일의 면접관입니다.
+                직무: {json_score['job_category']}
                 
-                지원자 정보(JD, 이력서)를 바탕으로 면접 질문 3가지를 생성하세요.
-                이전과 다른 창의적이고 날카로운 질문을 던지세요.
+                지원자 정보를 바탕으로 창의적이고 날카로운 면접 질문 3가지를 생성하세요.
                 
                 JSON 형식: {{ "questions": [ {{ "q": "질문", "intent": "의도", "tip": "팁" }}, ... ] }}
                 """
@@ -167,37 +168,92 @@ if analyze_btn:
                 json_questions = json.loads(res_questions.text)
                 
                 
-                # [STEP 3] 결과 합치기
+                # [STEP 3] 결과 합치기 및 세션 저장
                 final_result = {**json_score, **json_questions}
                 
-                # 로그 확인
-                score = final_result.get('score', 0)
-                q_count = len(final_result.get('questions', []))
-                print(f"[{datetime.datetime.now()}] ✅ 최종 완료 | 점수: {score}점 (고정됨) | 질문: {q_count}개", flush=True)
+                # 메타 데이터 추가 (로그용)
+                final_result['meta'] = {
+                    'timestamp': str(datetime.datetime.now()),
+                    'mode': mode,
+                    'jd_len': len(jd_input),
+                    'resume_len': len(resume_input)
+                }
+                
+                # 세션에 결과 저장 (화면 리로드를 위해)
+                st.session_state['analysis_result'] = final_result
+                st.session_state['log_saved'] = False # 아직 만족도 평가 안 함
                 
                 status.update(label="✅ 분석 완료!", state="complete", expanded=False)
-                
-                # --- 화면 출력 ---
-                st.markdown("<br>", unsafe_allow_html=True)
-                
-                st.markdown(f"""
-                <div class="result-card" style="text-align: center;">
-                    <span class="score-badge">직무 적합도</span>
-                    <h1 style="color: #1E293B; font-size: 3.5rem; margin: 10px 0;">{final_result['score']}<span style="font-size: 1.5rem; color: #94A3B8;">/100</span></h1>
-                    <p style="font-size: 1.1rem; color: #475569;">{final_result['summary']}</p>
-                    <div style="background: #F1F5F9; padding: 15px; border-radius: 8px; margin-top: 20px; text-align: left;">
-                        <strong style="color: #334155;">💡 보완 Tip:</strong> <span style="color: #475569;">{final_result['feedback']}</span>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                st.subheader(f"📝 {mode} 스타일 예상 질문")
-                
-                for i, q in enumerate(final_result['questions']):
-                    with st.expander(f"Q{i+1}. {q['q']}", expanded=True):
-                        st.markdown(f"**🎯 질문 의도:** {q['intent']}")
-                        st.info(f"**💡 답변 가이드:** {q['tip']}")
 
             except Exception as e:
                 print(f"[{datetime.datetime.now()}] 🚨 오류 발생: {str(e)}", flush=True)
                 st.error(f"오류가 발생했습니다: {str(e)}")
+                st.stop()
+
+# --- 결과 화면 출력 (세션에 데이터가 있을 경우에만 표시) ---
+if st.session_state['analysis_result']:
+    result = st.session_state['analysis_result']
+    meta = result['meta']
+    
+    # 1차 로그 출력 (만족도 평가 전, 기본 데이터 로깅)
+    # 사용자가 만족도를 안 누르고 나갈 수도 있으므로 여기서 기본 로그는 남깁니다.
+    if not st.session_state['log_saved']:
+        log_msg = (
+            f"[{datetime.datetime.now()}] 📊 분석결과 | "
+            f"직무: {result.get('job_category', 'Unknown')} | "
+            f"점수: {result['score']} | "
+            f"모드: {meta['mode']} | "
+            f"글자수(J/R): {meta['jd_len']}/{meta['resume_len']} | "
+            f"질문수: {len(result['questions'])}"
+        )
+        print(log_msg, flush=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # 점수 카드
+    st.markdown(f"""
+    <div class="result-card" style="text-align: center;">
+        <span class="score-badge">직무 적합도</span>
+        <h1 style="color: #1E293B; font-size: 3.5rem; margin: 10px 0;">{result['score']}<span style="font-size: 1.5rem; color: #94A3B8;">/100</span></h1>
+        <p style="font-size: 1.0rem; color: #64748B; margin-bottom: 5px;">분석 직무: {result.get('job_category', '직무 미상')}</p>
+        <p style="font-size: 1.1rem; color: #475569;">{result['summary']}</p>
+        <div style="background: #F1F5F9; padding: 15px; border-radius: 8px; margin-top: 20px; text-align: left;">
+            <strong style="color: #334155;">💡 보완 Tip:</strong> <span style="color: #475569;">{result['feedback']}</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.subheader(f"📝 {meta['mode']} 스타일 예상 질문")
+    
+    for i, q in enumerate(result['questions']):
+        with st.expander(f"Q{i+1}. {q['q']}", expanded=True):
+            st.markdown(f"**🎯 질문 의도:** {q['intent']}")
+            st.info(f"**💡 답변 가이드:** {q['tip']}")
+
+    # --- 만족도 조사 UI ---
+    st.markdown("---")
+    st.markdown("#### 💬 결과가 도움이 되셨나요?")
+    st.caption("아래 버튼을 눌러 평가해주시면 서비스 개선에 큰 도움이 됩니다.")
+    
+    cols = st.columns(5)
+    emojis = ["😡", "🙁", "😐", "🙂", "😍"]
+    
+    def save_feedback(score):
+        # [최종 로그] 만족도 포함된 완전한 로그 기록
+        full_log = (
+            f"[{datetime.datetime.now()}] ⭐ 사용자피드백 | "
+            f"만족도: {score}점 | "
+            f"직무: {result.get('job_category')} | "
+            f"점수: {result['score']} | "
+            f"모드: {meta['mode']} | "
+            f"JD: {meta['jd_len']}자 | "
+            f"Resume: {meta['resume_len']}자"
+        )
+        print(full_log, flush=True)
+        st.toast(f"{score}점 평가 감사합니다! 로그가 저장되었습니다.", icon="✅")
+        st.session_state['log_saved'] = True
+
+    # 1~5점 버튼 생성
+    for i in range(5):
+        if cols[i].button(f"{emojis[i]} {i+1}점", use_container_width=True, key=f"rating_{i}"):
+            save_feedback(i+1)
