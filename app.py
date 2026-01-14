@@ -106,59 +106,74 @@ if analyze_btn:
     else:
         with st.status("🔍 AI 면접관이 서류를 검토하고 있습니다...", expanded=True) as status:
             try:
-                # [STEP 1] 점수 채점 (냉정한 평가관 모드)
-                # temperature: 0.0 -> 점수 고정
-                print(f"[{datetime.datetime.now()}] 1️⃣ 직무 적합도 채점 중... (엄격 모드)", flush=True)
+                # [STEP 1] 점수 채점 (변수 차단 모드)
+                print(f"[{datetime.datetime.now()}] 1️⃣ 직무 적합도 정밀 채점 중...", flush=True)
                 
+                # [핵심 설정 1] top_k를 1로 설정하여 '무조건 1등 답변'만 선택하게 강제
                 config_strict = {
-                    "temperature": 0.0, # 창의성 0%
+                    "temperature": 0.0, 
+                    "top_p": 1,
+                    "top_k": 1, # <--- 여기가 핵심! (변수 창출 원천 봉쇄)
                     "response_mime_type": "application/json",
                 }
+                
+                # 요청하신 모델명 적용
                 model_strict = genai.GenerativeModel('models/gemini-2.5-flash', generation_config=config_strict)
                 
+                # [핵심 설정 2] '느낌'이 아니라 '계산'을 하도록 알고리즘 지시
                 prompt_score = f"""
-                당신은 냉정한 AI 평가관입니다.
-                [입력 데이터] JD: {jd_input} / 이력서: {resume_input}
+                당신은 엄격한 채점 알고리즘입니다. 
+                아래 [채점 기준]에 따라 기계적으로 점수를 계산하세요. 추론하지 말고 계산하세요.
+
+                [입력 데이터] 
+                JD: {jd_input}
+                이력서: {resume_input}
                 
-                오직 키워드 매칭률에 기반하여 '직무 적합도 점수(0~100)'와 '요약', '보완점'을 평가하세요.
-                JSON 형식: {{ "score": 숫자, "summary": "문장", "feedback": "문장" }}
+                [채점 기준 Algorithm]
+                1. JD에 명시된 '핵심 역량/기술' 키워드를 추출하세요.
+                2. 이력서에 해당 키워드가 있는지 1:1로 대조하세요.
+                3. (매칭된 키워드 수 / 전체 핵심 키워드 수) * 100 으로 점수를 산출하세요.
+                4. 결과값은 소수점을 버리고 정수로 출력하세요.
+                
+                **중요: 동일한 입력값에 대해서는 반드시 비트 단위로 동일한 점수가 나와야 합니다.**
+
+                JSON 형식: {{ "score": 숫자, "summary": "3줄 요약", "feedback": "핵심 보완점 1개" }}
                 """
                 
                 res_score = model_strict.generate_content(prompt_score)
-                json_score = json.loads(res_score.text) # 점수 결과 확보
+                json_score = json.loads(res_score.text)
                 
                 
-                # [STEP 2] 질문 생성 (창의적인 면접관 모드)
-                # temperature: 1.0 -> 매번 다른 질문 생성
-                print(f"[{datetime.datetime.now()}] 2️⃣ 면접 질문 생성 중... (창의 모드)", flush=True)
+                # [STEP 2] 질문 생성 (다양성 모드)
+                print(f"[{datetime.datetime.now()}] 2️⃣ 면접 질문 생성 중...", flush=True)
                 
+                # 질문은 매번 달라야 하므로 temperature 1.0 유지
                 config_creative = {
-                    "temperature": 1.0, # 창의성 100% (질문 다양화)
+                    "temperature": 1.0, 
                     "response_mime_type": "application/json",
                 }
                 model_creative = genai.GenerativeModel('models/gemini-2.5-flash', generation_config=config_creative)
                 
                 prompt_questions = f"""
                 당신은 '{mode}' 스타일의 면접관입니다.
-                [입력 데이터] JD: {jd_input} / 이력서: {resume_input}
                 
-                위 지원자에게 던질 날카롭고 창의적인 면접 질문 3가지를 생성하세요.
-                이전과 다른 관점의 질문을 하는 것이 좋습니다.
+                지원자 정보(JD, 이력서)를 바탕으로 면접 질문 3가지를 생성하세요.
+                이전과 다른 창의적이고 날카로운 질문을 던지세요.
                 
                 JSON 형식: {{ "questions": [ {{ "q": "질문", "intent": "의도", "tip": "팁" }}, ... ] }}
                 """
                 
                 res_questions = model_creative.generate_content(prompt_questions)
-                json_questions = json.loads(res_questions.text) # 질문 결과 확보
+                json_questions = json.loads(res_questions.text)
                 
                 
                 # [STEP 3] 결과 합치기
                 final_result = {**json_score, **json_questions}
                 
-                # 로그 출력
+                # 로그 확인
                 score = final_result.get('score', 0)
                 q_count = len(final_result.get('questions', []))
-                print(f"[{datetime.datetime.now()}] ✅ 분석 완료! | 점수: {score}점 (고정) | 질문: {q_count}개 (변동)", flush=True)
+                print(f"[{datetime.datetime.now()}] ✅ 최종 완료 | 점수: {score}점 (고정됨) | 질문: {q_count}개", flush=True)
                 
                 status.update(label="✅ 분석 완료!", state="complete", expanded=False)
                 
