@@ -100,7 +100,7 @@ with center_col:
 
 # 7. AI 분석 로직
 
-# [필수] 세션 스테이트 초기화 (결과 유지를 위해 필요)
+# [필수] 세션 스테이트 초기화
 if 'analysis_result' not in st.session_state:
     st.session_state['analysis_result'] = None
 if 'log_saved' not in st.session_state:
@@ -115,36 +115,41 @@ if analyze_btn:
     else:
         with st.status("🔍 AI 면접관이 서류를 검토하고 있습니다...", expanded=True) as status:
             try:
-                # [STEP 1] 점수 채점 + 직무 분류 (직무 분류 기능 추가됨)
-                print(f"[{datetime.datetime.now()}] 1️⃣ 직무 적합도 및 분류 분석 중...", flush=True)
+                # [STEP 1] 점수 채점 + 직무 분류
+                print(f"[{datetime.datetime.now()}] 1️⃣ 직무 적합도 및 분류 분석 중... (Gemma-27b)", flush=True)
                 
+                # Gemma 모델 설정 (JSON 강제 옵션 제외 - 호환성 위해)
                 config_strict = {
                     "temperature": 0.0, 
                     "top_p": 1, 
                     "top_k": 1, 
-                    "response_mime_type": "application/json",
                 }
-                model_strict = genai.GenerativeModel('models/gemini-2.0-flash', generation_config=config_strict)
                 
-                # 프롬프트에 'job_category' 추출 요청 추가
+                # [수정] 쿼터가 넉넉한 'gemma-3-27b-it' 사용
+                model_strict = genai.GenerativeModel('models/gemma-3-27b-it', generation_config=config_strict)
+                
                 prompt_score = f"""
-                당신은 엄격한 채점 알고리즘입니다. 
+                You are a strict hiring algorithm.
                 
-                [입력 데이터] 
+                [Input Data]
                 JD: {jd_input}
-                이력서: {resume_input}
+                Resume: {resume_input}
                 
-                [지시사항]
-                1. JD를 분석하여 '직무 분류(job_category)'를 단답형으로 정의하세요. (예: 백엔드 개발, 영업 관리, 콘텐츠 마케팅)
-                2. [채점 기준]에 따라 기계적으로 점수를 계산하세요.
-                   - JD 핵심 키워드 매칭률(%)을 정수로 환산.
-                   - 동일 입력값 = 동일 점수 (필수).
-
-                JSON 형식: {{ "score": 숫자, "job_category": "직무명", "summary": "3줄 요약", "feedback": "핵심 보완점" }}
+                [Instructions]
+                1. Analyze the JD to define 'job_category' (e.g., Backend Dev, Marketing).
+                2. Calculate a 'score' (0-100) based strictly on keyword matching between JD and Resume.
+                   - Same input must yield the EXACT same score.
+                
+                [Output Format]
+                Provide ONLY a valid JSON object. Do not add markdown blocks like ```json.
+                Format:
+                {{ "score": 85, "job_category": "Target Job", "summary": "3 line summary", "feedback": "One key improvement" }}
                 """
                 
                 res_score = model_strict.generate_content(prompt_score)
-                json_score = json.loads(res_score.text)
+                # 혹시 마크다운이 섞여 나올 경우를 대비한 전처리
+                text_score = res_score.text.replace('```json', '').replace('```', '').strip()
+                json_score = json.loads(text_score)
                 
                 
                 # [STEP 2] 질문 생성
@@ -152,27 +157,29 @@ if analyze_btn:
                 
                 config_creative = {
                     "temperature": 1.0, 
-                    "response_mime_type": "application/json",
                 }
-                model_creative = genai.GenerativeModel('models/gemini-2.0-flash', generation_config=config_creative)
+                # 여기도 Gemma-27b 사용
+                model_creative = genai.GenerativeModel('models/gemma-3-27b-it', generation_config=config_creative)
                 
                 prompt_questions = f"""
-                당신은 '{mode}' 스타일의 면접관입니다.
-                직무: {json_score['job_category']}
+                You are a '{mode}' style interviewer.
+                Job Category: {json_score['job_category']}
                 
-                지원자 정보를 바탕으로 창의적이고 날카로운 면접 질문 3가지를 생성하세요.
+                Based on the JD and Resume provided previously, generate 3 sharp interview questions.
                 
-                JSON 형식: {{ "questions": [ {{ "q": "질문", "intent": "의도", "tip": "팁" }}, ... ] }}
+                [Output Format]
+                Provide ONLY a valid JSON object. Do not add markdown blocks.
+                {{ "questions": [ {{ "q": "Question text", "intent": "Intent", "tip": "Advice" }}, ... ] }}
                 """
                 
                 res_questions = model_creative.generate_content(prompt_questions)
-                json_questions = json.loads(res_questions.text)
+                text_questions = res_questions.text.replace('```json', '').replace('```', '').strip()
+                json_questions = json.loads(text_questions)
                 
                 
                 # [STEP 3] 결과 합치기 및 세션 저장
                 final_result = {**json_score, **json_questions}
                 
-                # 메타 데이터 추가 (로그용)
                 final_result['meta'] = {
                     'timestamp': str(datetime.datetime.now()),
                     'mode': mode,
@@ -180,9 +187,8 @@ if analyze_btn:
                     'resume_len': len(resume_input)
                 }
                 
-                # 세션에 결과 저장 (화면 리로드를 위해)
                 st.session_state['analysis_result'] = final_result
-                st.session_state['log_saved'] = False # 아직 만족도 평가 안 함
+                st.session_state['log_saved'] = False 
                 
                 status.update(label="✅ 분석 완료!", state="complete", expanded=False)
 
@@ -191,13 +197,11 @@ if analyze_btn:
                 st.error(f"오류가 발생했습니다: {str(e)}")
                 st.stop()
 
-# --- 결과 화면 출력 (세션에 데이터가 있을 경우에만 표시) ---
+# --- 결과 화면 출력 (기존과 동일) ---
 if st.session_state['analysis_result']:
     result = st.session_state['analysis_result']
     meta = result['meta']
     
-    # 1차 로그 출력 (만족도 평가 전, 기본 데이터 로깅)
-    # 사용자가 만족도를 안 누르고 나갈 수도 있으므로 여기서 기본 로그는 남깁니다.
     if not st.session_state['log_saved']:
         log_msg = (
             f"[{datetime.datetime.now()}] 📊 분석결과 | "
@@ -211,7 +215,6 @@ if st.session_state['analysis_result']:
 
     st.markdown("<br>", unsafe_allow_html=True)
     
-    # 점수 카드
     st.markdown(f"""
     <div class="result-card" style="text-align: center;">
         <span class="score-badge">직무 적합도</span>
@@ -231,7 +234,6 @@ if st.session_state['analysis_result']:
             st.markdown(f"**🎯 질문 의도:** {q['intent']}")
             st.info(f"**💡 답변 가이드:** {q['tip']}")
 
-    # --- 만족도 조사 UI ---
     st.markdown("---")
     st.markdown("#### 💬 결과가 도움이 되셨나요?")
     st.caption("아래 버튼을 눌러 평가해주시면 서비스 개선에 큰 도움이 됩니다.")
@@ -240,7 +242,6 @@ if st.session_state['analysis_result']:
     emojis = ["😡", "🙁", "😐", "🙂", "😍"]
     
     def save_feedback(score):
-        # [최종 로그] 만족도 포함된 완전한 로그 기록
         full_log = (
             f"[{datetime.datetime.now()}] ⭐ 사용자피드백 | "
             f"만족도: {score}점 | "
@@ -254,7 +255,6 @@ if st.session_state['analysis_result']:
         st.toast(f"{score}점 평가 감사합니다! 로그가 저장되었습니다.", icon="✅")
         st.session_state['log_saved'] = True
 
-    # 1~5점 버튼 생성
     for i in range(5):
         if cols[i].button(f"{emojis[i]} {i+1}점", use_container_width=True, key=f"rating_{i}"):
             save_feedback(i+1)
