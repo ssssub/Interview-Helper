@@ -149,7 +149,7 @@ if analyze_btn:
                         # JSON 형태를 못 찾은 경우
                         raise ValueError("JSON 형식을 찾을 수 없음")
 
-                except (json.JSONDecodeError, ValueError) as e:
+                except (json.JSONDecodeError, ValueError) as e:x`
                     # [로그] 실패 원인 상세 기록
                     print(f"[{datetime.datetime.now()}] ❌ 파싱 실패 | 원인: {str(e)}", flush=True)
                     print(f"[{datetime.datetime.now()}] 🔍 AI 원본 응답: {original_text}", flush=True) # 이게 로그에 찍혀야 고칠 수 있음
@@ -161,4 +161,30 @@ if analyze_btn:
                 # =================================
                 
                 status.update(label="✅ 분석 완료!", state="complete", expanded=False)
-                # (아래 결과 출력 코드는 그대로 유지...)
+                
+                st.markdown("<br>", unsafe_allow_html=True)
+                
+                # (기존 기능 유지) 결과 화면 출력
+                st.markdown(f"""
+                <div class="result-card" style="text-align: center;">
+                    <span class="score-badge">직무 적합도</span>
+                    <h1 style="color: #1E293B; font-size: 3.5rem; margin: 10px 0;">{result['score']}<span style="font-size: 1.5rem; color: #94A3B8;">/100</span></h1>
+                    <p style="font-size: 1.1rem; color: #475569;">{result['summary']}</p>
+                    <div style="background: #F1F5F9; padding: 15px; border-radius: 8px; margin-top: 20px; text-align: left;">
+                        <strong style="color: #334155;">💡 보완 Tip:</strong> <span style="color: #475569;">{result['feedback']}</span>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                st.subheader(f"📝 {mode} 스타일 예상 질문")
+                
+                for i, q in enumerate(result['questions']):
+                    with st.expander(f"Q{i+1}. {q['q']}", expanded=True):
+                        st.markdown(f"**🎯 질문 의도:** {q['intent']}")
+                        st.info(f"**💡 답변 가이드:** {q['tip']}")
+                        
+            except Exception as e:
+                # [로그] 시스템 에러 기록
+                print(f"[{datetime.datetime.now()}] 🚨 시스템 오류 발생: {str(e)}")
+                st.error(f"오류가 발생했습니다: {str(e)}")
+               
