@@ -2,7 +2,6 @@ import streamlit as st
 import google.generativeai as genai
 import json
 import datetime
-import re
 
 # 1. 페이지 기본 설정
 st.set_page_config(
@@ -100,31 +99,32 @@ with center_col:
 
 # 7. AI 분석 로직
 if analyze_btn:
-    # [로그] 버튼 클릭 시간 기록
-    print(f"\n[{datetime.datetime.now()}] 🖱️ '분석 시작' 버튼 클릭됨")
+    # [로그] 버튼 클릭 즉시 기록
+    print(f"\n[{datetime.datetime.now()}] 🖱️ '분석 시작' 버튼 클릭됨", flush=True)
 
     if not jd_input or not resume_input:
         st.warning("⚠️ 정확한 분석을 위해 채용 공고와 이력서 내용을 모두 입력해주세요.")
-        # [로그] 입력 누락 경고
-        print(f"[{datetime.datetime.now()}] ⚠️ 입력 데이터 누락 (JD: {len(jd_input)}자, Resume: {len(resume_input)}자)")
+        # [로그] 입력 누락 기록
+        print(f"[{datetime.datetime.now()}] ⚠️ 입력 데이터 누락 (JD: {len(jd_input)}자, Resume: {len(resume_input)}자)", flush=True)
     else:
         with st.status("🔍 AI 면접관이 서류를 검토하고 있습니다...", expanded=True) as status:
             try:
-                # [로그] 분석 시작 세부 정보
-                print(f"[{datetime.datetime.now()}] ▶️ AI 분석 시작 | 모드: {mode} | JD길이: {len(jd_input)} | 이력서길이: {len(resume_input)}")
+                # [로그] 분석 시작 기록
+                print(f"[{datetime.datetime.now()}] ▶️ AI 분석 시작 | 모드: {mode} | JD: {len(jd_input)}자 | 이력서: {len(resume_input)}자", flush=True)
 
-                # (기존 기능 유지) 일관성을 위해 temperature를 0으로 설정
+                # [핵심 설점] JSON 모드 강제 적용 (오류 방지 치트키)
                 generation_config = {
-                    "temperature": 0.0,
-                    "top_p": 1,
-                    "top_k": 32,
-                    "max_output_tokens": 4096,
+                    "temperature": 0.1,
+                    "top_p": 0.95,
+                    "top_k": 64,
+                    "max_output_tokens": 8192,
+                    "response_mime_type": "application/json", # <--- 무조건 JSON만 뱉게 함
                 }
                 
-                # (기존 기능 유지) 모델 설정
-                model = genai.GenerativeModel('models/gemini-2.5-flash', generation_config=generation_config)
+                # 모델 설정 (1.5 Flash 사용)
+                model = genai.GenerativeModel('gemini-1.5-flash', generation_config=generation_config)
                 
-                # (기존 기능 유지) 프롬프트
+                # 프롬프트 (기존 내용 유지)
                 prompt = f"""
                 당신은 전문 채용 담당자입니다. 아래 두 가지 작업을 순서대로 수행하세요.
 
@@ -144,7 +144,7 @@ if analyze_btn:
                 - 질문의 어조와 강도는 '{mode}'를 철저히 따르세요.
 
                 [출력 형식]
-                반드시 아래 JSON 형식으로만 출력하세요 (Markdown 코드 블록 제외):
+                반드시 JSON 형식으로만 응답하세요.
                 {{
                     "score": 0~100 숫자,
                     "summary": "적합도 평가 요약 (정중한 말투)",
@@ -172,27 +172,28 @@ if analyze_btn:
                 # API 호출
                 response = model.generate_content(prompt)
                 
-                # JSON 파싱 및 결과 처리
+                # 결과 처리 (JSON 모드 덕분에 복잡한 전처리 불필요)
                 try:
-                    text_response = response.text.replace('```json', '').replace('```', '').strip()
-                    result = json.loads(text_response)
+                    result = json.loads(response.text)
                     
-                    # [로그] 분석 성공 및 결과 요약 기록
+                    # [로그] 성공 기록
                     score = result.get('score', 0)
                     q_count = len(result.get('questions', []))
-                    print(f"[{datetime.datetime.now()}] ✅ 분석 성공! | 점수: {score}점 | 생성된 질문: {q_count}개")
+                    print(f"[{datetime.datetime.now()}] ✅ 분석 성공! | 점수: {score}점 | 질문수: {q_count}개", flush=True)
 
-                except json.JSONDecodeError:
-                    # [로그] 파싱 에러 기록
-                    print(f"[{datetime.datetime.now()}] ❌ JSON 파싱 오류 발생 | 응답 내용: {text_response[:50]}...")
-                    st.error("AI 응답 처리 중 오류가 발생했습니다. 다시 시도해주세요.")
+                except Exception as e:
+                    # [로그] 파싱 실패 시 원본 출력
+                    print(f"[{datetime.datetime.now()}] ❌ 파싱/응답 오류 | 원인: {str(e)}", flush=True)
+                    print(f"[{datetime.datetime.now()}] 🔍 AI 원본 응답: {response.text}", flush=True)
+                    st.error("AI 응답을 처리하는 중 오류가 발생했습니다.")
                     st.stop()
                 
-                status.update(label="✅ 분석 완료!", state="complete", expanded=False)
+                status.update(label="✅ 분석 완료! 결과를 확인하세요.", state="complete", expanded=False)
                 
+                # 결과 화면 출력
                 st.markdown("<br>", unsafe_allow_html=True)
                 
-                # (기존 기능 유지) 결과 화면 출력
+                # 종합 점수 카드
                 st.markdown(f"""
                 <div class="result-card" style="text-align: center;">
                     <span class="score-badge">직무 적합도</span>
@@ -204,12 +205,18 @@ if analyze_btn:
                 </div>
                 """, unsafe_allow_html=True)
                 
+                # 질문 리스트
                 st.subheader(f"📝 {mode} 스타일 예상 질문")
                 
                 for i, q in enumerate(result['questions']):
                     with st.expander(f"Q{i+1}. {q['q']}", expanded=True):
                         st.markdown(f"**🎯 질문 의도:** {q['intent']}")
                         st.info(f"**💡 답변 가이드:** {q['tip']}")
+                        
+            except Exception as e:
+                # [로그] 시스템 에러 기록
+                print(f"[{datetime.datetime.now()}] 🚨 시스템 치명적 오류: {str(e)}", flush=True)
+                st.error(f"오류가 발생했습니다: {str(e)}")
                         
             except Exception as e:
                 # [로그] 시스템 에러 기록
