@@ -95,7 +95,8 @@ with center_col:
         options=["부드러운 면접 (Soft)", "표준 면접 (Standard)", "압박 면접 (Pressure)"],
         value="표준 면접 (Standard)"
     )
-    analyze_btn = st.button("AI 심층 분석 시작")
+    # [수정] use_container_width=True 추가 -> 버튼이 컬럼 너비만큼 꽉 차서 중앙 정렬 효과
+    analyze_btn = st.button("AI 심층 분석 시작", use_container_width=True)
 
 # 7. AI 분석 로직
 
