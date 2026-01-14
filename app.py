@@ -105,66 +105,53 @@ if analyze_btn:
     if not jd_input or not resume_input:
         st.warning("⚠️ 정확한 분석을 위해 채용 공고와 이력서 내용을 모두 입력해주세요.")
         # [로그] 입력 누락 기록
-        print(f"[{datetime.datetime.now()}] ⚠️ 입력 데이터 누락 (JD: {len(jd_input)}자, Resume: {len(resume_input)}자)", flush=True)
+        print(f"[{datetime.datetime.now()}] ⚠️ 입력 데이터 누락", flush=True)
     else:
         with st.status("🔍 AI 면접관이 서류를 검토하고 있습니다...", expanded=True) as status:
             try:
                 # [로그] 분석 시작 기록
                 print(f"[{datetime.datetime.now()}] ▶️ AI 분석 시작 | 모드: {mode} | JD: {len(jd_input)}자 | 이력서: {len(resume_input)}자", flush=True)
 
-                # [핵심 설점] JSON 모드 강제 적용 (오류 방지 치트키)
+                # [핵심 설정 1] temperature: 0.0 -> 점수가 절대 흔들리지 않게 고정 (일관성 100%)
                 generation_config = {
-                    "temperature": 0.1,
-                    "top_p": 0.95,
-                    "top_k": 64,
+                    "temperature": 0.0, 
+                    "top_p": 1,
+                    "top_k": 32,
                     "max_output_tokens": 8192,
-                    "response_mime_type": "application/json", # <--- 무조건 JSON만 뱉게 함
+                    "response_mime_type": "application/json",
                 }
                 
-                # 모델 설정 (1.5 Flash 사용)
+                # [모델명] 요청하신 'models/gemini-2.5-flash' 적용
                 model = genai.GenerativeModel('models/gemini-2.5-flash', generation_config=generation_config)
                 
-                # 프롬프트 (기존 내용 유지)
+                # [프롬프트] '기계적/정량적 채점'을 강력하게 지시
                 prompt = f"""
-                당신은 전문 채용 담당자입니다. 아래 두 가지 작업을 순서대로 수행하세요.
+                당신은 감정이 없는 냉철한 AI 채용 평가 알고리즘입니다.
 
                 [입력 데이터]
-                1. 채용 공고: {jd_input}
+                1. 채용 공고(JD): {jd_input}
                 2. 지원자 정보: {resume_input}
                 3. 면접 모드: {mode}
 
                 [작업 지시사항]
-                STEP 1. 직무 적합도 평가 (Objective Scoring):
-                - '면접 모드'와 관계없이, 오직 채용 공고와 지원자 정보의 일치도만을 기준으로 객관적으로 평가하세요.
-                - 압박 면접이라고 해서 점수를 낮게 주거나, 부드러운 면접이라고 해서 점수를 높게 주면 안 됩니다.
-                - 0~100점 사이의 점수를 냉정하게 산출하세요.
+                STEP 1. 직무 적합도 점수 산출 (Strict Quantitative Scoring):
+                - 점수는 오직 'JD의 필수 역량 키워드'가 '지원자 이력서'에 존재하는지 여부를 기계적으로 계산하여 산출하세요.
+                - 인간적인 직관이나 느낌을 배제하고, 키워드 매칭률(%)을 그대로 점수(0~100)로 환산하세요.
+                - 따라서 동일한 JD와 이력서가 입력되면, 언제나 100% 동일한 점수가 출력되어야 합니다.
 
-                STEP 2. 면접 질문 생성 (Roleplay):
-                - 이제 '{mode}'의 페르소나를 적용하여 질문을 생성하세요.
-                - 질문의 어조와 강도는 '{mode}'를 철저히 따르세요.
+                STEP 2. 면접 질문 생성:
+                - '{mode}'의 페르소나를 적용하여 질문을 생성하세요.
 
                 [출력 형식]
                 반드시 JSON 형식으로만 응답하세요.
                 {{
-                    "score": 0~100 숫자,
+                    "score": 0~100 숫자 (매칭률 기반 정수),
                     "summary": "적합도 평가 요약 (정중한 말투)",
                     "feedback": "보완점 한 가지",
                     "questions": [
-                        {{
-                            "q": "질문 내용",
-                            "intent": "의도",
-                            "tip": "답변 팁"
-                        }},
-                        {{
-                            "q": "질문 내용",
-                            "intent": "의도",
-                            "tip": "답변 팁"
-                        }},
-                        {{
-                            "q": "질문 내용",
-                            "intent": "의도",
-                            "tip": "답변 팁"
-                        }}
+                        {{ "q": "질문", "intent": "의도", "tip": "팁" }},
+                        {{ "q": "질문", "intent": "의도", "tip": "팁" }},
+                        {{ "q": "질문", "intent": "의도", "tip": "팁" }}
                     ]
                 }}
                 """
@@ -172,28 +159,27 @@ if analyze_btn:
                 # API 호출
                 response = model.generate_content(prompt)
                 
-                # 결과 처리 (JSON 모드 덕분에 복잡한 전처리 불필요)
+                # 결과 처리
                 try:
+                    # JSON 모드 사용 시 바로 파싱 가능
                     result = json.loads(response.text)
                     
-                    # [로그] 성공 기록
+                    # [로그] 성공 기록 (점수 확인용)
                     score = result.get('score', 0)
                     q_count = len(result.get('questions', []))
                     print(f"[{datetime.datetime.now()}] ✅ 분석 성공! | 점수: {score}점 | 질문수: {q_count}개", flush=True)
 
                 except Exception as e:
-                    # [로그] 파싱 실패 시 원본 출력
-                    print(f"[{datetime.datetime.now()}] ❌ 파싱/응답 오류 | 원인: {str(e)}", flush=True)
-                    print(f"[{datetime.datetime.now()}] 🔍 AI 원본 응답: {response.text}", flush=True)
-                    st.error("AI 응답을 처리하는 중 오류가 발생했습니다.")
+                    # [로그] 실패 시 원본 확인
+                    print(f"[{datetime.datetime.now()}] ❌ 파싱 오류: {str(e)}", flush=True)
+                    st.error("AI 응답 처리 중 오류가 발생했습니다.")
                     st.stop()
                 
-                status.update(label="✅ 분석 완료! 결과를 확인하세요.", state="complete", expanded=False)
+                status.update(label="✅ 분석 완료!", state="complete", expanded=False)
                 
                 # 결과 화면 출력
                 st.markdown("<br>", unsafe_allow_html=True)
                 
-                # 종합 점수 카드
                 st.markdown(f"""
                 <div class="result-card" style="text-align: center;">
                     <span class="score-badge">직무 적합도</span>
@@ -205,7 +191,6 @@ if analyze_btn:
                 </div>
                 """, unsafe_allow_html=True)
                 
-                # 질문 리스트
                 st.subheader(f"📝 {mode} 스타일 예상 질문")
                 
                 for i, q in enumerate(result['questions']):
@@ -214,11 +199,6 @@ if analyze_btn:
                         st.info(f"**💡 답변 가이드:** {q['tip']}")
                         
             except Exception as e:
-                # [로그] 시스템 에러 기록
-                print(f"[{datetime.datetime.now()}] 🚨 시스템 치명적 오류: {str(e)}", flush=True)
-                st.error(f"오류가 발생했습니다: {str(e)}")
-                        
-            except Exception as e:
-                # [로그] 시스템 에러 기록
-                print(f"[{datetime.datetime.now()}] 🚨 시스템 오류 발생: {str(e)}")
+                # [로그] 시스템 에러
+                print(f"[{datetime.datetime.now()}] 🚨 시스템 오류: {str(e)}", flush=True)
                 st.error(f"오류가 발생했습니다: {str(e)}")
