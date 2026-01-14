@@ -121,7 +121,7 @@ if analyze_btn:
                 }
                 
                 # (기존 기능 유지) 모델 설정
-                model = genai.GenerativeModel('gemini-1.5-flash', generation_config=generation_config)
+                model = genai.GenerativeModel('models/gemini-2.5-flash', generation_config=generation_config)
                 
                 # (기존 기능 유지) 프롬프트
                 prompt = f"""
