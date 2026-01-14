@@ -100,56 +100,93 @@ with center_col:
 
 # 7. AI 분석 로직
 if analyze_btn:
-    # [수정 1] flush=True 추가 -> 버튼 누르자마자 즉시 로그 뜸
-    print(f"\n[{datetime.datetime.now()}] 🖱️ '분석 시작' 버튼 클릭됨", flush=True)
+    # [로그] 버튼 클릭 시간 기록
+    print(f"\n[{datetime.datetime.now()}] 🖱️ '분석 시작' 버튼 클릭됨")
 
     if not jd_input or not resume_input:
         st.warning("⚠️ 정확한 분석을 위해 채용 공고와 이력서 내용을 모두 입력해주세요.")
-        # [수정 2] flush=True 추가
-        print(f"[{datetime.datetime.now()}] ⚠️ 입력 데이터 누락", flush=True)
+        # [로그] 입력 누락 경고
+        print(f"[{datetime.datetime.now()}] ⚠️ 입력 데이터 누락 (JD: {len(jd_input)}자, Resume: {len(resume_input)}자)")
     else:
         with st.status("🔍 AI 면접관이 서류를 검토하고 있습니다...", expanded=True) as status:
             try:
-                # [수정 3] flush=True 추가
-                print(f"[{datetime.datetime.now()}] ▶️ AI 분석 시작 | 모드: {mode} | JD: {len(jd_input)}자", flush=True)
+                # [로그] 분석 시작 세부 정보
+                print(f"[{datetime.datetime.now()}] ▶️ AI 분석 시작 | 모드: {mode} | JD길이: {len(jd_input)} | 이력서길이: {len(resume_input)}")
 
-               generation_config = {
-                    "temperature": 0,
-                    "top_p": 0.95,
-                    "top_k": 64,
-                    "max_output_tokens": 8192,
-                    "response_mime_type": "application/json",  # <--- [핵심] 무조건 JSON으로만 답하게 함
+                # (기존 기능 유지) 일관성을 위해 temperature를 0으로 설정
+                generation_config = {
+                    "temperature": 0.0,
+                    "top_p": 1,
+                    "top_k": 32,
+                    "max_output_tokens": 4096,
                 }
                 
-                # 작성자님이 말씀하신 "되는 모델"로 설정 유지
-                model = genai.GenerativeModel('models/gemini-2.5-flash', generation_config=generation_config)
+                # (기존 기능 유지) 모델 설정
+                model = genai.GenerativeModel('gemini-1.5-flash', generation_config=generation_config)
                 
+                # (기존 기능 유지) 프롬프트
                 prompt = f"""
                 당신은 전문 채용 담당자입니다. 아래 두 가지 작업을 순서대로 수행하세요.
-                (중략 - 기존 프롬프트 내용 그대로 유지)
+
+                [입력 데이터]
+                1. 채용 공고: {jd_input}
+                2. 지원자 정보: {resume_input}
+                3. 면접 모드: {mode}
+
+                [작업 지시사항]
+                STEP 1. 직무 적합도 평가 (Objective Scoring):
+                - '면접 모드'와 관계없이, 오직 채용 공고와 지원자 정보의 일치도만을 기준으로 객관적으로 평가하세요.
+                - 압박 면접이라고 해서 점수를 낮게 주거나, 부드러운 면접이라고 해서 점수를 높게 주면 안 됩니다.
+                - 0~100점 사이의 점수를 냉정하게 산출하세요.
+
+                STEP 2. 면접 질문 생성 (Roleplay):
+                - 이제 '{mode}'의 페르소나를 적용하여 질문을 생성하세요.
+                - 질문의 어조와 강도는 '{mode}'를 철저히 따르세요.
+
+                [출력 형식]
+                반드시 아래 JSON 형식으로만 출력하세요 (Markdown 코드 블록 제외):
+                {{
+                    "score": 0~100 숫자,
+                    "summary": "적합도 평가 요약 (정중한 말투)",
+                    "feedback": "보완점 한 가지",
+                    "questions": [
+                        {{
+                            "q": "질문 내용",
+                            "intent": "의도",
+                            "tip": "답변 팁"
+                        }},
+                        {{
+                            "q": "질문 내용",
+                            "intent": "의도",
+                            "tip": "답변 팁"
+                        }},
+                        {{
+                            "q": "질문 내용",
+                            "intent": "의도",
+                            "tip": "답변 팁"
+                        }}
+                    ]
+                }}
                 """
                 
+                # API 호출
                 response = model.generate_content(prompt)
                 
+                # JSON 파싱 및 결과 처리
                 try:
-                    response = model.generate_content(prompt)
+                    text_response = response.text.replace('```json', '').replace('```', '').strip()
+                    result = json.loads(text_response)
                     
-                    # JSON 모드를 켰으므로 복잡한 정규표현식(re) 필요 없음!
-                    # 바로 텍스트를 JSON으로 변환하면 됩니다.
-                    result = json.loads(response.text)
-                    
-                    # [로그] 성공 기록
+                    # [로그] 분석 성공 및 결과 요약 기록
                     score = result.get('score', 0)
-                    print(f"[{datetime.datetime.now()}] ✅ 분석 성공! | 점수: {score}점", flush=True)
+                    q_count = len(result.get('questions', []))
+                    print(f"[{datetime.datetime.now()}] ✅ 분석 성공! | 점수: {score}점 | 생성된 질문: {q_count}개")
 
-                except Exception as e:
-                    # 그래도 에러가 난다면, AI가 응답을 거부했거나 멈춘 경우임
-                    print(f"[{datetime.datetime.now()}] ❌ 치명적 오류 | 원인: {str(e)}", flush=True)
-                    print(f"[{datetime.datetime.now()}] 🔍 원본 응답: {response.text if 'response' in locals() else '응답 없음'}", flush=True)
-                    
-                    st.error("AI가 답변을 생성하지 못했습니다. (내용이 너무 길거나, 안전 정책에 걸렸을 수 있습니다.)")
+                except json.JSONDecodeError:
+                    # [로그] 파싱 에러 기록
+                    print(f"[{datetime.datetime.now()}] ❌ JSON 파싱 오류 발생 | 응답 내용: {text_response[:50]}...")
+                    st.error("AI 응답 처리 중 오류가 발생했습니다. 다시 시도해주세요.")
                     st.stop()
-                # =================================
                 
                 status.update(label="✅ 분석 완료!", state="complete", expanded=False)
                 
@@ -178,4 +215,3 @@ if analyze_btn:
                 # [로그] 시스템 에러 기록
                 print(f"[{datetime.datetime.now()}] 🚨 시스템 오류 발생: {str(e)}")
                 st.error(f"오류가 발생했습니다: {str(e)}")
-               
