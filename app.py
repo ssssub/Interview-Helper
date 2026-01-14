@@ -149,7 +149,7 @@ if analyze_btn:
                         # JSON 형태를 못 찾은 경우
                         raise ValueError("JSON 형식을 찾을 수 없음")
 
-                except (json.JSONDecodeError, ValueError) as e:x`
+                except (json.JSONDecodeError, ValueError) as e:
                     # [로그] 실패 원인 상세 기록
                     print(f"[{datetime.datetime.now()}] ❌ 파싱 실패 | 원인: {str(e)}", flush=True)
                     print(f"[{datetime.datetime.now()}] 🔍 AI 원본 응답: {original_text}", flush=True) # 이게 로그에 찍혀야 고칠 수 있음
