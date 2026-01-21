@@ -67,8 +67,8 @@ except:
 # 4. 헤더
 st.markdown("""
     <div class="header-container">
+        <div class="header-subtitle">AI 기반 면접관이 당신의 이력서 및 스펙과 공고를 분석하여 질문을 생성합니다.</div>
         <div class="header-title">Interview Master</div>
-        <div class="header-subtitle">AI 기반 면접관이 당신의 이력서와 공고를 분석하여 질문을 생성합니다</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -82,8 +82,8 @@ with left_col:
     jd_input = st.text_area("jd_input", placeholder="지원하려는 공고 내용을 입력하세요.", height=400, label_visibility="collapsed")
 
 with right_col:
-    st.markdown('<div class="section-header">👤 나의 이력서 / 경험</div>', unsafe_allow_html=True)
-    resume_input = st.text_area("resume_input", placeholder="이력서 또는 경험을 입력하세요.", height=400, label_visibility="collapsed")
+    st.markdown('<div class="section-header">👤 나의 이력서 / 스펙</div>', unsafe_allow_html=True)
+    resume_input = st.text_area("resume_input", placeholder="이력서 또는 스펙을 입력하세요. ", height=400, label_visibility="collapsed")
 
 # 6. 컨트롤 섹션
 st.markdown("<br>", unsafe_allow_html=True)
