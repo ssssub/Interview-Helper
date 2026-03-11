@@ -1,0 +1,16 @@
+name: Wake up Streamlit App
+
+on:
+  schedule:
+    # UTC 기준입니다. 한국 시간(KST) 오전 9시는 UTC 00:00입니다.
+    # 매일 한국 시간 오전 9시와 오후 9시에 실행되도록 설정 (하루 2번)
+    - cron: '0 0,12 * * *'
+  workflow_dispatch: # 수동으로도 실행할 수 있게 버튼을 만듭니다.
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send a request to wake up the app
+        run: |
+          curl -I https://interview-apper-wfeq2abzgdqyqf28hx9ktq.streamlit.app/
