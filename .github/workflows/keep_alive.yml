@@ -13,4 +13,4 @@ jobs:
     steps:
       - name: Send a request to wake up the app
         run: |
-          curl -I https://interview-apper-wfeq2abzgdqyqf28hx9ktq.streamlit.app/
+          curl -L -I https://interview-apper-wfeq2abzgdqyqf28hx9ktq.streamlit.app/
