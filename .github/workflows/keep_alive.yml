@@ -1,15 +1,16 @@
-name: Wake up Streamlit App
+name: Wake Streamlit App
 
 on:
   schedule:
-    - cron: "0 0,12 * * *"   # UTC 기준: 하루 2번
+    - cron: "0 */6 * * *"   # 6시간마다 실행 (UTC)
   workflow_dispatch:
 
 jobs:
   wake:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout
+      - name: Checkout repo
         uses: actions/checkout@v4
 
       - name: Setup Node
@@ -23,5 +24,11 @@ jobs:
           npm install playwright
           npx playwright install --with-deps chromium
 
-      - name: Wake Streamlit app
+      - name: Run wake script
         run: node wake.js
+
+      - name: Upload screenshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: streamlit-status
+          path: screenshot.png
