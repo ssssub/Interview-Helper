@@ -29,7 +29,7 @@ const { chromium } = require("playwright");
     // 분석 시작 버튼 대기
     console.log("Waiting for analysis button...");
 
-    const analysisButton = page.getByText("분석 시작", { exact: false });
+    const analysisButton = page.getByText("AI 심층 분석 시작", { exact: false });
 
     await analysisButton.waitFor({ timeout: 120000 });
 
