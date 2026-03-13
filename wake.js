@@ -27,14 +27,18 @@ const { chromium } = require("playwright");
     }
 
     // 분석 시작 버튼 대기
-    console.log("Waiting for analysis button...");
+    console.log("Waiting for Streamlit UI...");
 
-    const analysisButton = page.getByText("AI 심층 분석 시작", { exact: false });
-
+    await page.waitForTimeout(15000); // Streamlit 렌더링 대기
+    
+    console.log("Looking for analysis button...");
+    
+    const analysisButton = page.locator("button:has-text('AI 심층 분석 시작')");
+    
     await analysisButton.waitFor({ timeout: 120000 });
-
+    
     console.log("Clicking analysis button");
-
+    
     await analysisButton.click();
 
     // Streamlit 실행 대기
